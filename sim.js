@@ -1,236 +1,460 @@
-// Celestial Sim — all user-facing strings come from strings.json.
-// Physics uses a softened inverse-square law in arbitrary units.
-
-const G = 1.0;
-const SOFT = 4.0;
-const DT = 1 / 60;
-
-let strings = {};
-let bodies = [];
-let running = true;
-let timeScale = 1;
-let showTrails = true;
-let elapsedYears = 0;
-
-const $ = (id) => document.getElementById(id);
+/* =========================================================================
+   STRINGS (i18n)
+   All user-facing text is loaded from strings.json and applied to every node
+   carrying data-i18n / data-i18n-html / data-i18n-title. Math content in
+   .formula blocks is left alone — those are rendered by KaTeX as static
+   LaTeX source, not translatable copy.
+   ========================================================================= */
+let STRINGS = {};
 
 async function loadStrings() {
   try {
-    const res = await fetch("strings.json");
+    const res = await fetch('strings.json');
     if (!res.ok) throw new Error(res.statusText);
-    strings = await res.json();
+    STRINGS = await res.json();
   } catch (err) {
-    console.error(err);
-    strings = { errors: { stringsLoadFailed: "Failed to load strings.json." } };
-    alert(strings.errors.stringsLoadFailed);
+    console.warn('[celestial-sim] strings.json failed to load:', err);
+    STRINGS = {};
   }
 }
 
-function lookup(path) {
-  return path.split(".").reduce((o, k) => (o == null ? o : o[k]), strings) ?? "";
+function t(dotted, fallback = '') {
+  const v = dotted.split('.').reduce((o, k) => (o == null ? o : o[k]), STRINGS);
+  return (typeof v === 'string') ? v : fallback;
 }
 
 function applyStrings() {
-  document.querySelectorAll("[data-i18n]").forEach((el) => {
-    const key = el.getAttribute("data-i18n");
-    const text = lookup(key);
-    if (el.tagName === "TITLE") {
-      document.title = text;
-    } else {
-      el.textContent = text;
-    }
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const text = t(key, el.textContent);
+    if (el.tagName === 'TITLE') document.title = text;
+    else el.textContent = text;
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const key = el.getAttribute('data-i18n-html');
+    el.innerHTML = t(key, el.innerHTML);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.getAttribute('data-i18n-title');
+    el.title = t(key, el.title);
   });
 }
 
-function defaultBodies() {
-  // Central star plus a few orbiting bodies in stable-ish circular orbits.
-  const cx = 450, cy = 300;
-  const star = { x: cx, y: cy, vx: 0, vy: 0, m: 20000, r: 14, color: "#ffd27a", trail: [] };
-  const mk = (r, mass, color, phase = 0) => {
-    const speed = Math.sqrt((G * star.m) / r);
-    return {
-      x: cx + r * Math.cos(phase),
-      y: cy + r * Math.sin(phase),
-      vx: -speed * Math.sin(phase),
-      vy:  speed * Math.cos(phase),
-      m: mass,
-      r: Math.max(2, Math.cbrt(mass) * 0.9),
-      color,
-      trail: [],
-    };
-  };
-  return [
-    star,
-    mk(70,   8,  "#9fd3ff", 0),
-    mk(120, 20,  "#c5a0ff", 1.2),
-    mk(180, 35,  "#7fe0a6", 2.4),
-    mk(260, 15,  "#ff9f9f", 3.6),
-  ];
-}
-
-function step(dt) {
-  for (let i = 0; i < bodies.length; i++) {
-    let ax = 0, ay = 0;
-    const a = bodies[i];
-    for (let j = 0; j < bodies.length; j++) {
-      if (i === j) continue;
-      const b = bodies[j];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const r2 = dx * dx + dy * dy + SOFT * SOFT;
-      const inv = 1 / Math.sqrt(r2);
-      const f = (G * b.m) * inv * inv * inv;
-      ax += f * dx;
-      ay += f * dy;
+/* =========================================================================
+   N-BODY PHYSICS
+   Softened 1/r^n force law + velocity-Verlet integration.
+   Flat Float64Arrays for cache-friendly inner loops.
+     pos[2i], pos[2i+1]  = x, y of body i
+     F_ij ∝ m_i m_j (r_j - r_i) / (|r|² + ε²)^((n+1)/2)
+   ========================================================================= */
+class NBody {
+  constructor(positions, velocities, masses) {
+    this.N = masses.length;
+    this.pos    = new Float64Array(this.N * 2);
+    this.vel    = new Float64Array(this.N * 2);
+    this.acc    = new Float64Array(this.N * 2);
+    this.accOld = new Float64Array(this.N * 2);
+    this.mass   = new Float64Array(this.N);
+    for (let i = 0; i < this.N; i++) {
+      this.pos[2*i]     = positions[i][0];
+      this.pos[2*i + 1] = positions[i][1];
+      this.vel[2*i]     = velocities[i][0];
+      this.vel[2*i + 1] = velocities[i][1];
+      this.mass[i]      = masses[i];
     }
-    a.vx += ax * dt;
-    a.vy += ay * dt;
+    this.G = 1.0; this.eps = 0.05; this.n = 2.0; this.dt = 0.01;
+    this.t = 0;
+    this.computeAccel();
+    this.E0 = this.energy();
   }
-  for (const b of bodies) {
-    b.x += b.vx * dt;
-    b.y += b.vy * dt;
-    if (showTrails) {
-      b.trail.push(b.x, b.y);
-      if (b.trail.length > 400) b.trail.splice(0, b.trail.length - 400);
-    } else if (b.trail.length) {
-      b.trail.length = 0;
-    }
-  }
-  elapsedYears += dt * 0.1;
-}
 
-function draw(ctx, canvas) {
-  ctx.fillStyle = "rgba(3, 5, 10, 0.35)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  if (showTrails) {
-    for (const b of bodies) {
-      if (b.trail.length < 4) continue;
-      ctx.strokeStyle = b.color + "66";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(b.trail[0], b.trail[1]);
-      for (let i = 2; i < b.trail.length; i += 2) {
-        ctx.lineTo(b.trail[i], b.trail[i + 1]);
+  computeAccel() {
+    const N = this.N, pos = this.pos, m = this.mass, acc = this.acc;
+    const eps2 = this.eps * this.eps;
+    const power = (this.n + 1) * 0.5;
+    for (let k = 0; k < 2*N; k++) acc[k] = 0;
+    for (let i = 0; i < N; i++) {
+      const xi = pos[2*i], yi = pos[2*i + 1];
+      let ax = 0, ay = 0;
+      for (let j = 0; j < N; j++) {
+        if (j === i) continue;
+        const dx = pos[2*j]     - xi;
+        const dy = pos[2*j + 1] - yi;
+        const r2 = dx*dx + dy*dy + eps2;
+        const f = this.G * m[j] * Math.pow(r2, -power);
+        ax += f * dx;
+        ay += f * dy;
       }
+      acc[2*i]     = ax;
+      acc[2*i + 1] = ay;
+    }
+  }
+
+  step() {
+    const N = this.N, dt = this.dt;
+    const pos = this.pos, vel = this.vel, acc = this.acc, accOld = this.accOld;
+    for (let k = 0; k < 2*N; k++) accOld[k] = acc[k];
+    for (let k = 0; k < 2*N; k++) pos[k] += vel[k] * dt + 0.5 * acc[k] * dt * dt;
+    this.computeAccel();
+    for (let k = 0; k < 2*N; k++) vel[k] += 0.5 * (accOld[k] + acc[k]) * dt;
+    this.t += dt;
+  }
+
+  stepN(n) { for (let i = 0; i < n; i++) this.step(); }
+
+  energy() {
+    const N = this.N, pos = this.pos, vel = this.vel, m = this.mass;
+    let KE = 0;
+    for (let i = 0; i < N; i++) {
+      const vx = vel[2*i], vy = vel[2*i + 1];
+      KE += 0.5 * m[i] * (vx*vx + vy*vy);
+    }
+    let PE = 0;
+    const eps2 = this.eps * this.eps;
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const dx = pos[2*j]     - pos[2*i];
+        const dy = pos[2*j + 1] - pos[2*i + 1];
+        const r  = Math.sqrt(dx*dx + dy*dy + eps2);
+        PE -= this.G * m[i] * m[j] / r;
+      }
+    }
+    return KE + PE;
+  }
+
+  setParams(G, eps, n, dt) {
+    this.G = G; this.eps = eps; this.n = n; this.dt = dt;
+    this.computeAccel();
+    this.E0 = this.energy();
+  }
+
+  setMasses(masses) {
+    for (let i = 0; i < this.N; i++) this.mass[i] = masses[i];
+    this.computeAccel();
+    this.E0 = this.energy();
+  }
+}
+
+/* =========================================================================
+   PRESETS
+   ========================================================================= */
+const PRESETS = {
+  binary: {
+    bodies: [
+      { pos: [-1, 0], vel: [0, -0.5], mass: 1.0 },
+      { pos: [ 1, 0], vel: [0,  0.5], mass: 1.0 },
+    ],
+    colors: ['#f6c667', '#ff7ab6'],
+  },
+  figure8: {
+    bodies: [
+      { pos: [-0.97000436,  0.24308753], vel: [ 0.466203685,  0.43236573 ], mass: 1.0 },
+      { pos: [ 0.97000436, -0.24308753], vel: [ 0.466203685,  0.43236573 ], mass: 1.0 },
+      { pos: [ 0,           0         ], vel: [-0.93240737,  -0.86473146 ], mass: 1.0 },
+    ],
+    colors: ['#89c9ff', '#f6c667', '#ff7ab6'],
+  },
+  solar: {
+    bodies: [
+      { pos: [ 0,   0  ], vel: [ 0,     0    ], mass: 20.0 },
+      { pos: [ 1.5, 0  ], vel: [ 0,     3.651], mass:  0.3 },
+      { pos: [-2.5, 0  ], vel: [ 0,    -2.828], mass:  0.6 },
+      { pos: [ 0,   4  ], vel: [-2.236, 0    ], mass:  0.2 },
+    ],
+    colors: ['#f6c667', '#6be1c7', '#ff7ab6', '#c89bf5'],
+  },
+  cluster: {
+    bodies: [
+      { pos: [-1.5, -0.8], vel: [ 0.2,  0.4], mass: 1.2 },
+      { pos: [ 1.2,  0.9], vel: [-0.3, -0.3], mass: 0.9 },
+      { pos: [ 0.3, -1.4], vel: [-0.1,  0.2], mass: 1.0 },
+      { pos: [-0.8,  1.3], vel: [ 0.4, -0.1], mass: 0.7 },
+      { pos: [ 1.8, -0.2], vel: [-0.2,  0.1], mass: 1.3 },
+    ],
+    colors: ['#89c9ff', '#f6c667', '#ff7ab6', '#80e0a3', '#c89bf5'],
+  },
+  chaos: {
+    bodies: [
+      { pos: [-1.0,  0.5], vel: [ 0.0,  0.3], mass: 1.0 },
+      { pos: [ 1.0,  0.0], vel: [ 0.3, -0.2], mass: 1.5 },
+      { pos: [ 0.0, -1.0], vel: [-0.4,  0.1], mass: 0.8 },
+    ],
+    colors: ['#89c9ff', '#f6c667', '#ff7ab6'],
+  },
+};
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+let sim;
+let currentPreset = 'binary';
+let paused = false;
+let trail = [];
+let lastFrame = 0;
+let fps = 60;
+let currentMasses = [];
+const params = { G: 1.0, eps: 0.05, n: 2.0, dt: 0.01, substeps: 4, trail: 220, zoom: 1 };
+
+async function init() {
+  await loadStrings();
+  applyStrings();
+  loadPreset('binary');
+  renderAllMath();
+  wireUpLatexInteractions();
+  updateLegend();
+  requestAnimationFrame(animate);
+}
+
+function renderAllMath() {
+  if (typeof renderMathInElement !== 'function') {
+    // KaTeX auto-render loads async; try again once it has arrived.
+    setTimeout(renderAllMath, 50);
+    return;
+  }
+  renderMathInElement(document.body, {
+    delimiters: [{ left: '\\[', right: '\\]', display: true }],
+    trust: (ctx) => ctx.command === '\\htmlClass',
+    strict: false,
+    throwOnError: false,
+  });
+  // Wire LaTeX interactions again after render replaces the DOM nodes.
+  wireUpLatexInteractions();
+}
+
+function wireUpLatexInteractions() {
+  const classToParam = { 'tw-G': 'G', 'tw-eps': 'eps', 'tw-n': 'n', 'tw-dt': 'dt' };
+  for (const cls in classToParam) {
+    const param = classToParam[cls];
+    document.querySelectorAll('.katex .' + cls).forEach(el => {
+      if (el.dataset.wired === '1') return;
+      el.dataset.wired = '1';
+      el.addEventListener('mouseenter', () => highlightRow(param, true));
+      el.addEventListener('mouseleave', () => highlightRow(param, false));
+      el.addEventListener('click', () => focusRow(param));
+    });
+  }
+}
+
+function highlightRow(param, on) {
+  document.querySelectorAll(`[data-param="${param}"]`).forEach(r => {
+    r.classList.toggle('highlight', on);
+  });
+}
+
+function focusRow(param) {
+  const row = document.querySelector(`[data-param="${param}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.remove('pulse'); void row.offsetWidth; row.classList.add('pulse');
+  const inp = row.querySelector('input');
+  if (inp) inp.focus();
+}
+
+function loadPreset(name) {
+  currentPreset = name;
+  const p = PRESETS[name];
+  const positions  = p.bodies.map(b => b.pos);
+  const velocities = p.bodies.map(b => b.vel);
+  const masses     = p.bodies.map(b => b.mass);
+  currentMasses = masses.slice();
+  sim = new NBody(positions, velocities, masses);
+  sim.setParams(params.G, params.eps, params.n, params.dt);
+  trail = p.bodies.map(() => []);
+  rebuildMassSliders();
+}
+
+function rebuildMassSliders() {
+  const container = document.getElementById('mass-sliders');
+  container.innerHTML = '';
+  const preset = PRESETS[currentPreset];
+  const hintTemplate = t('sections.masses.hintBody', 'body {n}');
+  preset.bodies.forEach((b, i) => {
+    const hint = hintTemplate.replace('{n}', String(i + 1));
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    row.dataset.param = 'mass' + i;
+    row.style.setProperty('--slider-color', preset.colors[i]);
+    row.innerHTML = `
+      <label style="color: ${preset.colors[i]}">m<span class="hint">${hint}</span></label>
+      <input type="range" min="0.05" max="25" step="0.05" value="${b.mass}">
+      <span class="value">${b.mass.toFixed(2)}</span>`;
+    const input = row.querySelector('input');
+    const valEl = row.querySelector('.value');
+    input.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      valEl.textContent = v.toFixed(2);
+      currentMasses[i] = v;
+      sim.setMasses(currentMasses);
+    });
+    container.appendChild(row);
+  });
+}
+
+function updateLegend() {
+  const el = document.getElementById('legend-force');
+  if (!el) return;
+  el.innerHTML = `
+    <span><span style="color:var(--col-G)">G</span> = <span class="val">${params.G.toFixed(2)}</span></span>
+    <span><span style="color:var(--col-eps)">ε</span> = <span class="val">${params.eps.toFixed(2)}</span></span>
+    <span><span style="color:var(--col-n)">n</span> = <span class="val">${params.n.toFixed(2)}</span></span>
+    <span><span style="color:var(--col-dt)">Δt</span> = <span class="val">${params.dt.toFixed(3)}</span></span>`;
+}
+
+document.querySelectorAll('.slider-row input[type=range]').forEach(input => {
+  const row = input.closest('.slider-row');
+  const param = row.dataset.param;
+  if (!param || param.startsWith('mass')) return;
+  input.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    const dp = (param === 'dt') ? 3
+             : (param === 'substeps' || param === 'trail') ? 0 : 2;
+    row.querySelector('.value').textContent = v.toFixed(dp);
+    if      (param === 'substeps') params.substeps = v;
+    else if (param === 'trail')    params.trail = v;
+    else if (param === 'zoom')     params.zoom = v;
+    else {
+      params[param] = v;
+      if (sim) sim.setParams(params.G, params.eps, params.n, params.dt);
+    }
+    updateLegend();
+  });
+});
+
+document.getElementById('preset').addEventListener('change', e => loadPreset(e.target.value));
+document.getElementById('reset').addEventListener('click', () => loadPreset(currentPreset));
+document.getElementById('playPause').addEventListener('click', () => {
+  paused = !paused;
+  document.getElementById('playPause').textContent =
+    paused ? t('controls.play', 'Play') : t('controls.pause', 'Pause');
+});
+document.getElementById('minimize').addEventListener('click', () => {
+  const panel = document.getElementById('panel');
+  const btn = document.getElementById('minimize');
+  panel.classList.toggle('collapsed');
+  const collapsed = panel.classList.contains('collapsed');
+  btn.textContent = collapsed ? '+' : '−';
+  btn.title = collapsed ? t('controls.expandPanel', 'Expand panel')
+                        : t('controls.collapsePanel', 'Collapse panel');
+});
+
+/* =========================================================================
+   CANVAS RENDERING
+   ========================================================================= */
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let stars = [];
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = window.innerWidth  * dpr;
+  canvas.height = window.innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  stars = [];
+  for (let i = 0; i < 280; i++) {
+    stars.push({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      r: Math.random() * 1.3,
+      a: Math.random() * 0.55 + 0.15,
+      twinkle: Math.random() * Math.PI * 2,
+    });
+  }
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function worldToScreen(x, y) {
+  const W = window.innerWidth, H = window.innerHeight;
+  const scale = Math.min(W, H) / 8 * params.zoom;
+  return [W / 2 + x * scale, H / 2 - y * scale];
+}
+
+function draw() {
+  const W = window.innerWidth, H = window.innerHeight;
+  ctx.clearRect(0, 0, W, H);
+
+  const now = performance.now() * 0.001;
+  ctx.fillStyle = '#ffffff';
+  for (const s of stars) {
+    ctx.globalAlpha = s.a * (0.7 + 0.3 * Math.sin(now * 1.5 + s.twinkle));
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const preset = PRESETS[currentPreset];
+  const N = sim.N;
+
+  for (let i = 0; i < N; i++) {
+    trail[i].push([sim.pos[2*i], sim.pos[2*i + 1]]);
+    while (trail[i].length > params.trail) trail[i].shift();
+  }
+  for (let i = 0; i < N; i++) {
+    const color = preset.colors[i];
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.1;
+    const tr = trail[i];
+    for (let j = 1; j < tr.length; j++) {
+      ctx.globalAlpha = (j / tr.length) * 0.55;
+      ctx.beginPath();
+      const [x1, y1] = worldToScreen(tr[j - 1][0], tr[j - 1][1]);
+      const [x2, y2] = worldToScreen(tr[j    ][0], tr[j    ][1]);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
     }
   }
+  ctx.globalAlpha = 1;
 
-  for (const b of bodies) {
-    ctx.fillStyle = b.color;
+  for (let i = 0; i < N; i++) {
+    const [x, y] = worldToScreen(sim.pos[2*i], sim.pos[2*i + 1]);
+    const m = currentMasses[i] || preset.bodies[i].mass;
+    const r = Math.max(3, Math.pow(m, 1 / 3) * 5.5);
+    const color = preset.colors[i];
+
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 5);
+    glow.addColorStop(0, color + 'cc');
+    glow.addColorStop(0.35, color + '55');
+    glow.addColorStop(1, color + '00');
+    ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.arc(x, y, r * 5, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
 }
 
-function updateStats(fps) {
-  $("stat-bodies").textContent = String(bodies.length);
-  $("stat-elapsed").textContent = elapsedYears.toFixed(2);
-  $("stat-fps").textContent = String(Math.round(fps));
-}
-
-function bindControls(canvas) {
-  $("btn-play").addEventListener("click", () => { running = true; });
-  $("btn-pause").addEventListener("click", () => { running = false; });
-  $("btn-reset").addEventListener("click", () => {
-    bodies = defaultBodies();
-    elapsedYears = 0;
-  });
-  $("btn-clear").addEventListener("click", () => {
-    bodies = [];
-    elapsedYears = 0;
-  });
-  $("btn-add").addEventListener("click", () => {
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const r = 120 + Math.random() * 200;
-    const phase = Math.random() * Math.PI * 2;
-    const starMass = bodies[0]?.m ?? 20000;
-    const speed = Math.sqrt((G * starMass) / r) * (0.8 + Math.random() * 0.4);
-    bodies.push({
-      x: cx + r * Math.cos(phase),
-      y: cy + r * Math.sin(phase),
-      vx: -speed * Math.sin(phase),
-      vy:  speed * Math.cos(phase),
-      m: 5 + Math.random() * 25,
-      r: 3 + Math.random() * 3,
-      color: `hsl(${Math.floor(Math.random() * 360)} 80% 70%)`,
-      trail: [],
-    });
-  });
-
-  $("speed").addEventListener("input", (e) => {
-    timeScale = parseFloat(e.target.value);
-  });
-  $("trails").addEventListener("change", (e) => {
-    showTrails = e.target.checked;
-  });
-
-  // Click to drop a body; drag to fling it.
-  let dragStart = null;
-  canvas.addEventListener("mousedown", (e) => {
-    const { x, y } = canvasPoint(canvas, e);
-    dragStart = { x, y };
-  });
-  canvas.addEventListener("mouseup", (e) => {
-    if (!dragStart) return;
-    const { x, y } = canvasPoint(canvas, e);
-    bodies.push({
-      x: dragStart.x,
-      y: dragStart.y,
-      vx: (x - dragStart.x) * 2,
-      vy: (y - dragStart.y) * 2,
-      m: 10,
-      r: 4,
-      color: "#ffffff",
-      trail: [],
-    });
-    dragStart = null;
-  });
-}
-
-function canvasPoint(canvas, e) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: ((e.clientX - rect.left) / rect.width) * canvas.width,
-    y: ((e.clientY - rect.top) / rect.height) * canvas.height,
-  };
-}
-
-async function main() {
-  await loadStrings();
-  applyStrings();
-
-  const canvas = $("sky");
-  const ctx = canvas.getContext("2d");
-
-  bodies = defaultBodies();
-  bindControls(canvas);
-
-  let last = performance.now();
-  let frame = 0;
-  let fpsWindowStart = last;
-  let fps = 0;
-
-  function loop(now) {
-    const dt = Math.min(0.05, (now - last) / 1000) * timeScale;
-    last = now;
-    if (running) step(dt);
-    draw(ctx, canvas);
-
-    frame++;
-    if (now - fpsWindowStart >= 500) {
-      fps = (frame * 1000) / (now - fpsWindowStart);
-      frame = 0;
-      fpsWindowStart = now;
-      updateStats(fps);
+function animate(now) {
+  if (!paused && sim) sim.stepN(params.substeps);
+  if (sim) {
+    draw();
+    document.getElementById('stat-time').textContent = sim.t.toFixed(2);
+    const E = sim.energy();
+    document.getElementById('stat-energy').textContent = E.toFixed(4);
+    if (Math.abs(sim.E0) > 1e-12) {
+      const drift = (E - sim.E0) / Math.abs(sim.E0);
+      const sign = drift >= 0 ? '+' : '';
+      document.getElementById('stat-drift').textContent = sign + (drift * 100).toFixed(3) + '%';
     }
-
-    requestAnimationFrame(loop);
   }
-  requestAnimationFrame(loop);
+  if (lastFrame && now - lastFrame > 0) {
+    fps = 0.9 * fps + 0.1 * (1000 / (now - lastFrame));
+    document.getElementById('stat-fps').textContent = fps.toFixed(0);
+  }
+  lastFrame = now;
+  requestAnimationFrame(animate);
 }
 
-main();
+init();

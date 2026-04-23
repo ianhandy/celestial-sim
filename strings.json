@@ -1,36 +1,68 @@
 {
   "app": {
-    "title": "Celestial Sim",
-    "tagline": "A tiny 2D gravity playground",
-    "heading": "Celestial Sim"
+    "title": "Celestial Mechanics — an interactive n-body simulation",
+    "brand": "Celestial Mechanics",
+    "tagline": "n-body · velocity-verlet"
   },
   "controls": {
-    "play": "Play",
-    "pause": "Pause",
     "reset": "Reset",
-    "addBody": "Add body",
-    "clear": "Clear",
-    "speedLabel": "Time scale",
-    "trailsLabel": "Trails"
+    "pause": "Pause",
+    "play": "Play",
+    "collapsePanel": "Collapse panel",
+    "expandPanel": "Expand panel"
+  },
+  "presets": {
+    "binary":  "Binary Stars",
+    "figure8": "Figure-8",
+    "solar":   "Solar System",
+    "cluster": "Cluster",
+    "chaos":   "Chaotic Trio"
+  },
+  "sections": {
+    "force": {
+      "number": "§1",
+      "heading": "Softened gravitational force",
+      "body": "Every pair of bodies <em>(i, j)</em> pulls on one another. A small softening <em>ε</em> is added to prevent the force blowing up when bodies approach — physically it smears each mass into a tiny Plummer sphere.",
+      "hintG":   "grav. const",
+      "hintEps": "softening",
+      "hintN":   "exponent",
+      "footnote": "Click any coloured symbol in the formula to jump to its slider. <strong style=\"color: var(--col-n)\">n = 2</strong> is our universe; <strong style=\"color: var(--col-n)\">n = 1</strong> gives unstable spirals, <strong style=\"color: var(--col-n)\">n &gt; 2</strong> gives precessing rosettes."
+    },
+    "integrator": {
+      "number": "§2",
+      "heading": "Velocity-Verlet integration",
+      "body": "A second-order symplectic scheme — small energy drift over long runs, unlike naive Euler which spirals away.",
+      "hintDt":       "step size",
+      "hintSubsteps": "steps / frame",
+      "footnote": "Smaller <strong style=\"color: var(--col-dt)\">Δt</strong> is more accurate but the simulation plays back slower. Try cranking Δt up to see the integrator break down."
+    },
+    "energy": {
+      "number": "§3",
+      "heading": "Total energy",
+      "body": "For a closed system this should be conserved. The drift meter below shows how much our integrator is cheating."
+    },
+    "masses": {
+      "number": "§4",
+      "heading": "Body masses",
+      "body": "Each preset starts with tuned initial conditions. Nudge a mass and watch the orbits decay, precess, or eject.",
+      "hintBody": "body {n}"
+    },
+    "display": {
+      "number": "§5",
+      "heading": "Display",
+      "hintTrail": "trail length",
+      "hintZoom":  "zoom"
+    }
   },
   "stats": {
-    "bodiesLabel": "Bodies",
-    "elapsedLabel": "Elapsed",
-    "fpsLabel": "FPS",
-    "yearsUnit": "yr"
-  },
-  "instructions": {
-    "heading": "How to play",
-    "line1": "Click anywhere on the canvas to drop a new body at rest.",
-    "line2": "Click-and-drag to fling a body with initial velocity.",
-    "line3": "Use the controls to pause, reset, or change the time scale."
-  },
-  "footer": {
-    "credit": "Built as a weekend toy. No external libraries.",
-    "physicsNote": "Gravity is simulated with a softened inverse-square law."
+    "title":  "Diagnostics",
+    "time":   "t",
+    "energy": "E",
+    "drift":  "ΔE / |E₀|",
+    "fps":    "fps"
   },
   "errors": {
-    "stringsLoadFailed": "Failed to load strings.json — UI will show placeholders.",
+    "stringsLoadFailed": "Failed to load strings.json — falling back to inline copy.",
     "canvasUnsupported": "Your browser does not support the HTML canvas element."
   }
 }
