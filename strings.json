@@ -1,0 +1,36 @@
+{
+  "app": {
+    "title": "Celestial Sim",
+    "tagline": "A tiny 2D gravity playground",
+    "heading": "Celestial Sim"
+  },
+  "controls": {
+    "play": "Play",
+    "pause": "Pause",
+    "reset": "Reset",
+    "addBody": "Add body",
+    "clear": "Clear",
+    "speedLabel": "Time scale",
+    "trailsLabel": "Trails"
+  },
+  "stats": {
+    "bodiesLabel": "Bodies",
+    "elapsedLabel": "Elapsed",
+    "fpsLabel": "FPS",
+    "yearsUnit": "yr"
+  },
+  "instructions": {
+    "heading": "How to play",
+    "line1": "Click anywhere on the canvas to drop a new body at rest.",
+    "line2": "Click-and-drag to fling a body with initial velocity.",
+    "line3": "Use the controls to pause, reset, or change the time scale."
+  },
+  "footer": {
+    "credit": "Built as a weekend toy. No external libraries.",
+    "physicsNote": "Gravity is simulated with a softened inverse-square law."
+  },
+  "errors": {
+    "stringsLoadFailed": "Failed to load strings.json — UI will show placeholders.",
+    "canvasUnsupported": "Your browser does not support the HTML canvas element."
+  }
+}

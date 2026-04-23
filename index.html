@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title data-i18n="app.title"></title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1 data-i18n="app.heading"></h1>
+    <p class="tagline" data-i18n="app.tagline"></p>
+  </header>
+
+  <main>
+    <section class="stage">
+      <canvas id="sky" width="900" height="600">
+        <span data-i18n="errors.canvasUnsupported"></span>
+      </canvas>
+
+      <div class="controls">
+        <button id="btn-play"    data-i18n="controls.play"></button>
+        <button id="btn-pause"   data-i18n="controls.pause"></button>
+        <button id="btn-reset"   data-i18n="controls.reset"></button>
+        <button id="btn-clear"   data-i18n="controls.clear"></button>
+        <button id="btn-add"     data-i18n="controls.addBody"></button>
+
+        <label>
+          <span data-i18n="controls.speedLabel"></span>
+          <input id="speed" type="range" min="0.1" max="5" step="0.1" value="1" />
+        </label>
+
+        <label>
+          <span data-i18n="controls.trailsLabel"></span>
+          <input id="trails" type="checkbox" checked />
+        </label>
+      </div>
+
+      <dl class="stats">
+        <dt data-i18n="stats.bodiesLabel"></dt> <dd id="stat-bodies">0</dd>
+        <dt data-i18n="stats.elapsedLabel"></dt> <dd><span id="stat-elapsed">0.00</span> <span data-i18n="stats.yearsUnit"></span></dd>
+        <dt data-i18n="stats.fpsLabel"></dt>    <dd id="stat-fps">0</dd>
+      </dl>
+    </section>
+
+    <aside class="instructions">
+      <h2 data-i18n="instructions.heading"></h2>
+      <ol>
+        <li data-i18n="instructions.line1"></li>
+        <li data-i18n="instructions.line2"></li>
+        <li data-i18n="instructions.line3"></li>
+      </ol>
+    </aside>
+  </main>
+
+  <footer>
+    <p data-i18n="footer.credit"></p>
+    <p data-i18n="footer.physicsNote"></p>
+  </footer>
+
+  <script src="sim.js" type="module"></script>
+</body>
+</html>
