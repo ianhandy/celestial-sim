@@ -47,7 +47,7 @@
       </div>
       <p data-i18n-html="sections.force.body"></p>
       <div class="formula">
-        \[\vec{F}_{ij} \;=\; \htmlClass{tw-G}{G}\,\frac{m_i\,m_j\,(\vec{r}_j - \vec{r}_i)}{\bigl(\,|\vec{r}_j - \vec{r}_i|^{2} + \htmlClass{tw-eps}{\varepsilon}^{2}\,\bigr)^{(\htmlClass{tw-n}{n}+1)/2}}\]
+        \[F \;=\; \htmlClass{tw-G}{G}\,\frac{m_1\,m_2}{\bigl(\,r^{2} + \htmlClass{tw-eps}{\varepsilon}^{2}\,\bigr)^{\htmlClass{tw-n}{n}/2}}\]
       </div>
       <div class="legend" id="legend-force"></div>
 
@@ -79,10 +79,10 @@
       </div>
       <p data-i18n="sections.integrator.body"></p>
       <div class="formula">
-        \[\vec{r}_{\,t+\htmlClass{tw-dt}{\Delta t}} = \vec{r}_t + \vec{v}_t\,\htmlClass{tw-dt}{\Delta t} + \tfrac{1}{2}\,\vec{a}_t\,\htmlClass{tw-dt}{\Delta t}^{\,2}\]
+        \[r_{\text{new}} = r + v\,\htmlClass{tw-dt}{\Delta t} + \tfrac{1}{2}\,a\,\htmlClass{tw-dt}{\Delta t}^{2}\]
       </div>
       <div class="formula">
-        \[\vec{v}_{\,t+\htmlClass{tw-dt}{\Delta t}} = \vec{v}_t + \tfrac{1}{2}\bigl(\vec{a}_t + \vec{a}_{\,t+\htmlClass{tw-dt}{\Delta t}}\bigr)\,\htmlClass{tw-dt}{\Delta t}\]
+        \[v_{\text{new}} = v + \tfrac{1}{2}\,(a + a_{\text{new}})\,\htmlClass{tw-dt}{\Delta t}\]
       </div>
 
       <div class="slider-group">
@@ -92,7 +92,7 @@
           <span class="value">0.010</span>
         </div>
         <div class="slider-row" data-param="substeps">
-          <label>—<span class="hint" data-i18n="sections.integrator.hintSubsteps">steps / frame</span></label>
+          <label><span class="hint" data-i18n="sections.integrator.hintSubsteps">steps / frame</span></label>
           <input type="range" min="1" max="20" step="1" value="4">
           <span class="value">4</span>
         </div>
@@ -107,7 +107,7 @@
       </div>
       <p data-i18n="sections.energy.body"></p>
       <div class="formula">
-        \[E \;=\; \underbrace{\tfrac{1}{2}\sum_i m_i\,|\vec{v}_i|^{2}}_{\text{kinetic}} \;-\; \underbrace{\htmlClass{tw-G}{G}\!\!\sum_{i\,<\,j}\frac{m_i\,m_j}{|\vec{r}_j - \vec{r}_i|}}_{\text{potential}}\]
+        \[E \;=\; \tfrac{1}{2}\sum m\,v^{2} \;-\; \htmlClass{tw-G}{G}\sum_{i<j}\frac{m_i\,m_j}{r_{ij}}\]
       </div>
     </div>
 
@@ -127,12 +127,12 @@
       </div>
       <div class="slider-group">
         <div class="slider-row" data-param="trail">
-          <label>—<span class="hint" data-i18n="sections.display.hintTrail">trail length</span></label>
+          <label><span class="hint" data-i18n="sections.display.hintTrail">trail length</span></label>
           <input type="range" min="0" max="600" step="10" value="220">
           <span class="value">220</span>
         </div>
         <div class="slider-row" data-param="zoom">
-          <label>—<span class="hint" data-i18n="sections.display.hintZoom">zoom</span></label>
+          <label><span class="hint" data-i18n="sections.display.hintZoom">zoom</span></label>
           <input type="range" min="0.3" max="3" step="0.05" value="1">
           <span class="value">1.00</span>
         </div>
@@ -145,9 +145,9 @@
 <div class="stats">
   <div class="title" data-i18n="stats.title">Diagnostics</div>
   <div class="stat-row"><span class="k" data-i18n="stats.time">t</span><span class="v" id="stat-time">0.00</span></div>
-  <div class="stat-row"><span class="k" data-i18n="stats.energy">E</span><span class="v" id="stat-energy">—</span></div>
-  <div class="stat-row"><span class="k" data-i18n="stats.drift">ΔE / |E₀|</span><span class="v" id="stat-drift">—</span></div>
-  <div class="stat-row"><span class="k" data-i18n="stats.fps">fps</span><span class="v" id="stat-fps">—</span></div>
+  <div class="stat-row"><span class="k" data-i18n="stats.energy">E</span><span class="v" id="stat-energy">...</span></div>
+  <div class="stat-row"><span class="k" data-i18n="stats.drift">ΔE / |E₀|</span><span class="v" id="stat-drift">...</span></div>
+  <div class="stat-row"><span class="k" data-i18n="stats.fps">fps</span><span class="v" id="stat-fps">...</span></div>
 </div>
 
 <script src="sim.js"></script>

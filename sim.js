@@ -2,8 +2,8 @@
    STRINGS (i18n)
    All user-facing text is loaded from strings.json and applied to every node
    carrying data-i18n / data-i18n-html / data-i18n-title. Math content in
-   .formula blocks is left alone — those are rendered by KaTeX as static
-   LaTeX source, not translatable copy.
+   .formula blocks is left alone (those are rendered by KaTeX as static
+   LaTeX source, not translatable copy).
    ========================================================================= */
 let STRINGS = {};
 
@@ -342,26 +342,84 @@ document.getElementById('minimize').addEventListener('click', () => {
    ========================================================================= */
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-let stars = [];
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
   canvas.width  = window.innerWidth  * dpr;
   canvas.height = window.innerHeight * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  stars = [];
-  for (let i = 0; i < 280; i++) {
-    stars.push({
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
-      r: Math.random() * 1.3,
-      a: Math.random() * 0.55 + 0.15,
-      twinkle: Math.random() * Math.PI * 2,
-    });
-  }
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+
+/* Gravity-warped grid: each grid vertex is pulled toward every body by an
+   amount proportional to that body's mass divided by distance squared. The
+   resulting bent lines show where space is "curved" most strongly. */
+function drawGravityGrid() {
+  if (!sim) return;
+  const W = window.innerWidth, H = window.innerHeight;
+  const scale = Math.min(W, H) / 8 * params.zoom;
+  const spacing = 38;
+  const cols = Math.ceil(W / spacing) + 3;
+  const rows = Math.ceil(H / spacing) + 3;
+  const N = sim.N;
+  const eps2 = params.eps * params.eps;
+
+  const xs = new Float32Array(rows * cols);
+  const ys = new Float32Array(rows * cols);
+
+  for (let ri = 0; ri < rows; ri++) {
+    for (let ci = 0; ci < cols; ci++) {
+      const sx0 = ci * spacing - spacing;
+      const sy0 = ri * spacing - spacing;
+      const wx = (sx0 - W / 2) / scale;
+      const wy = -(sy0 - H / 2) / scale;
+
+      let dx = 0, dy = 0;
+      for (let i = 0; i < N; i++) {
+        const rx = sim.pos[2 * i]     - wx;
+        const ry = sim.pos[2 * i + 1] - wy;
+        const r2 = rx * rx + ry * ry + eps2 + 0.05;
+        const m = currentMasses[i] || 1;
+        const pull = m * 0.18 / (r2 * r2);
+        dx += rx * pull;
+        dy += ry * pull;
+      }
+      const mag2 = dx * dx + dy * dy;
+      const maxPull = 0.7;
+      if (mag2 > maxPull * maxPull) {
+        const f = maxPull / Math.sqrt(mag2);
+        dx *= f; dy *= f;
+      }
+
+      const idx = ri * cols + ci;
+      xs[idx] = W / 2 + (wx + dx) * scale;
+      ys[idx] = H / 2 - (wy + dy) * scale;
+    }
+  }
+
+  ctx.strokeStyle = 'rgba(120, 160, 220, 0.22)';
+  ctx.lineWidth = 0.9;
+
+  for (let ri = 0; ri < rows; ri++) {
+    ctx.beginPath();
+    const base = ri * cols;
+    ctx.moveTo(xs[base], ys[base]);
+    for (let ci = 1; ci < cols; ci++) {
+      ctx.lineTo(xs[base + ci], ys[base + ci]);
+    }
+    ctx.stroke();
+  }
+  for (let ci = 0; ci < cols; ci++) {
+    ctx.beginPath();
+    ctx.moveTo(xs[ci], ys[ci]);
+    for (let ri = 1; ri < rows; ri++) {
+      const idx = ri * cols + ci;
+      ctx.lineTo(xs[idx], ys[idx]);
+    }
+    ctx.stroke();
+  }
+}
 
 function worldToScreen(x, y) {
   const W = window.innerWidth, H = window.innerHeight;
@@ -373,15 +431,7 @@ function draw() {
   const W = window.innerWidth, H = window.innerHeight;
   ctx.clearRect(0, 0, W, H);
 
-  const now = performance.now() * 0.001;
-  ctx.fillStyle = '#ffffff';
-  for (const s of stars) {
-    ctx.globalAlpha = s.a * (0.7 + 0.3 * Math.sin(now * 1.5 + s.twinkle));
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
+  drawGravityGrid();
 
   const preset = PRESETS[currentPreset];
   const N = sim.N;
