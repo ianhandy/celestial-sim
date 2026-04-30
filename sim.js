@@ -138,6 +138,9 @@ class NBody {
 /* =========================================================================
    PRESETS
    ========================================================================= */
+/* All presets use G = 1 sim units. Velocities are tuned for circular orbits
+   accounting for the default softening ε = 0.05; small drift over many orbits
+   is expected and shows up in the diagnostics drift meter. */
 const PRESETS = {
   binary: {
     bodies: [
@@ -163,23 +166,22 @@ const PRESETS = {
     ],
     colors: ['#f6c667', '#6be1c7', '#ff7ab6', '#c89bf5'],
   },
-  cluster: {
+  lagrange: {
     bodies: [
-      { pos: [-1.5, -0.8], vel: [ 0.2,  0.4], mass: 1.2 },
-      { pos: [ 1.2,  0.9], vel: [-0.3, -0.3], mass: 0.9 },
-      { pos: [ 0.3, -1.4], vel: [-0.1,  0.2], mass: 1.0 },
-      { pos: [-0.8,  1.3], vel: [ 0.4, -0.1], mass: 0.7 },
-      { pos: [ 1.8, -0.2], vel: [-0.2,  0.1], mass: 1.3 },
+      { pos: [ 1.000,  0.000], vel: [ 0.000,  0.760], mass: 1.0 },
+      { pos: [-0.500,  0.866], vel: [-0.658, -0.380], mass: 1.0 },
+      { pos: [-0.500, -0.866], vel: [ 0.658, -0.380], mass: 1.0 },
     ],
-    colors: ['#89c9ff', '#f6c667', '#ff7ab6', '#80e0a3', '#c89bf5'],
+    colors: ['#f6c667', '#89c9ff', '#ff7ab6'],
   },
-  chaos: {
+  pinwheel: {
     bodies: [
-      { pos: [-1.0,  0.5], vel: [ 0.0,  0.3], mass: 1.0 },
-      { pos: [ 1.0,  0.0], vel: [ 0.3, -0.2], mass: 1.5 },
-      { pos: [ 0.0, -1.0], vel: [-0.4,  0.1], mass: 0.8 },
+      { pos: [ 0,  1], vel: [-0.978,  0    ], mass: 1.0 },
+      { pos: [ 1,  0], vel: [ 0,      0.978], mass: 1.0 },
+      { pos: [ 0, -1], vel: [ 0.978,  0    ], mass: 1.0 },
+      { pos: [-1,  0], vel: [ 0,     -0.978], mass: 1.0 },
     ],
-    colors: ['#89c9ff', '#f6c667', '#ff7ab6'],
+    colors: ['#f6c667', '#89c9ff', '#ff7ab6', '#80e0a3'],
   },
 };
 
@@ -194,6 +196,7 @@ let lastFrame = 0;
 let fps = 60;
 let currentMasses = [];
 const params = { G: 1.0, eps: 0.05, n: 2.0, dt: 0.01, substeps: 4, trail: 220, zoom: 1 };
+const view = { panX: 0, panY: 0 };
 
 async function init() {
   await loadStrings();
@@ -260,6 +263,8 @@ function loadPreset(name) {
   sim = new NBody(positions, velocities, masses);
   sim.setParams(params.G, params.eps, params.n, params.dt);
   trail = p.bodies.map(() => []);
+  view.panX = 0;
+  view.panY = 0;
   rebuildMassSliders();
 }
 
@@ -337,6 +342,10 @@ document.getElementById('minimize').addEventListener('click', () => {
                         : t('controls.collapsePanel', 'Collapse panel');
 });
 
+document.getElementById('settings-toggle').addEventListener('click', () => {
+  document.getElementById('stats').classList.toggle('visible');
+});
+
 /* =========================================================================
    CANVAS RENDERING
    ========================================================================= */
@@ -352,28 +361,69 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-/* Gravity-warped grid: each grid vertex is pulled toward every body by an
-   amount proportional to that body's mass divided by distance squared. The
-   resulting bent lines show where space is "curved" most strongly. */
+/* Pan: click-and-drag (or single-finger drag) on the canvas shifts the view.
+   Pan is stored in screen pixels so zooming doesn't change how far you've
+   moved. Pan resets whenever a preset loads. */
+let panActive = false;
+let panLastX = 0, panLastY = 0;
+
+canvas.addEventListener('pointerdown', e => {
+  panActive = true;
+  panLastX = e.clientX;
+  panLastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('grabbing');
+});
+canvas.addEventListener('pointermove', e => {
+  if (!panActive) return;
+  view.panX += e.clientX - panLastX;
+  view.panY += e.clientY - panLastY;
+  panLastX = e.clientX;
+  panLastY = e.clientY;
+});
+canvas.addEventListener('pointerup', e => {
+  panActive = false;
+  canvas.releasePointerCapture(e.pointerId);
+  canvas.classList.remove('grabbing');
+});
+canvas.addEventListener('pointercancel', () => {
+  panActive = false;
+  canvas.classList.remove('grabbing');
+});
+
+/* Gravity-warped grid: each world-aligned grid vertex is pulled toward every
+   body by an amount proportional to mass / distance^4. The grid is anchored
+   to world coordinates so it slides with the camera when the user pans. */
 function drawGravityGrid() {
   if (!sim) return;
   const W = window.innerWidth, H = window.innerHeight;
   const scale = Math.min(W, H) / 8 * params.zoom;
-  const spacing = 38;
-  const cols = Math.ceil(W / spacing) + 3;
-  const rows = Math.ceil(H / spacing) + 3;
+
+  // World bounds visible on screen, accounting for pan.
+  const wxMin = (-W / 2 - view.panX) / scale;
+  const wxMax = ( W / 2 - view.panX) / scale;
+  const wyMin = (view.panY - H / 2) / scale;
+  const wyMax = (view.panY + H / 2) / scale;
+
+  // Aim for ~38px screen spacing, snapped to integer multiples in world space.
+  const spacingWorld = 38 / scale;
+  const x0 = Math.floor(wxMin / spacingWorld) - 1;
+  const x1 = Math.ceil (wxMax / spacingWorld) + 1;
+  const y0 = Math.floor(wyMin / spacingWorld) - 1;
+  const y1 = Math.ceil (wyMax / spacingWorld) + 1;
+  const cols = x1 - x0 + 1;
+  const rows = y1 - y0 + 1;
+  if (cols * rows > 6000) return;
+
   const N = sim.N;
   const eps2 = params.eps * params.eps;
-
   const xs = new Float32Array(rows * cols);
   const ys = new Float32Array(rows * cols);
 
   for (let ri = 0; ri < rows; ri++) {
     for (let ci = 0; ci < cols; ci++) {
-      const sx0 = ci * spacing - spacing;
-      const sy0 = ri * spacing - spacing;
-      const wx = (sx0 - W / 2) / scale;
-      const wy = -(sy0 - H / 2) / scale;
+      const wx = (x0 + ci) * spacingWorld;
+      const wy = (y0 + ri) * spacingWorld;
 
       let dx = 0, dy = 0;
       for (let i = 0; i < N; i++) {
@@ -393,8 +443,8 @@ function drawGravityGrid() {
       }
 
       const idx = ri * cols + ci;
-      xs[idx] = W / 2 + (wx + dx) * scale;
-      ys[idx] = H / 2 - (wy + dy) * scale;
+      xs[idx] = W / 2 + (wx + dx) * scale + view.panX;
+      ys[idx] = H / 2 - (wy + dy) * scale + view.panY;
     }
   }
 
@@ -424,7 +474,7 @@ function drawGravityGrid() {
 function worldToScreen(x, y) {
   const W = window.innerWidth, H = window.innerHeight;
   const scale = Math.min(W, H) / 8 * params.zoom;
-  return [W / 2 + x * scale, H / 2 - y * scale];
+  return [W / 2 + x * scale + view.panX, H / 2 - y * scale + view.panY];
 }
 
 function draw() {

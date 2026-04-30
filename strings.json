@@ -9,14 +9,15 @@
     "pause": "Pause",
     "play": "Play",
     "collapsePanel": "Collapse panel",
-    "expandPanel": "Expand panel"
+    "expandPanel": "Expand panel",
+    "toggleStats": "Toggle diagnostics"
   },
   "presets": {
-    "binary":  "Binary Stars",
-    "figure8": "Figure-8",
-    "solar":   "Solar System",
-    "cluster": "Cluster",
-    "chaos":   "Chaotic Trio"
+    "binary":   "Binary Stars",
+    "figure8":  "Figure-8",
+    "solar":    "Solar System",
+    "lagrange": "Triangle",
+    "pinwheel": "Pinwheel"
   },
   "sections": {
     "force": {
@@ -33,7 +34,7 @@
       "heading": "Stepping forward in time",
       "body": "Each frame we move every body forward in small time steps. This method keeps the total energy stable over long runs.",
       "hintDt":       "step size",
-      "hintSubsteps": "steps per frame",
+      "hintSubsteps": "speed",
       "footnote": "Smaller <strong style=\"color: var(--col-dt)\">Δt</strong> is more accurate but slower. Crank Δt up to watch the simulation break."
     },
     "energy": {
