@@ -216,6 +216,31 @@ select {
   font-family: var(--mono); font-size: 11.5px;
   text-align: right; white-space: nowrap;
 }
+/* Typable value field. Looks like the old read-only value display, but you
+   can click and edit. Spinners hidden. */
+.slider-row input.value {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 2px 4px;
+  border-radius: 3px;
+  width: 68px;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.slider-row input.value::-webkit-outer-spin-button,
+.slider-row input.value::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.slider-row input.value:hover {
+  background: rgba(140, 160, 200, 0.06);
+  border-color: var(--panel-border);
+}
+.slider-row input.value:focus {
+  background: rgba(137, 201, 255, 0.06);
+  border-color: rgba(137, 201, 255, 0.45);
+}
 
 .footnote {
   font-size: 11.5px; line-height: 1.55;

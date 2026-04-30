@@ -26,11 +26,11 @@
   <div class="tagline" data-i18n="app.tagline">n-body · velocity-verlet</div>
   <div class="spacer"></div>
   <select id="preset">
-    <option value="binary"   data-i18n="presets.binary">Binary Stars</option>
-    <option value="figure8"  data-i18n="presets.figure8">Figure-8</option>
-    <option value="solar"    data-i18n="presets.solar">Solar System</option>
-    <option value="lagrange" data-i18n="presets.lagrange">Triangle</option>
-    <option value="pinwheel" data-i18n="presets.pinwheel">Pinwheel</option>
+    <option value="binary"     data-i18n="presets.binary">Binary Stars</option>
+    <option value="earthMoon"  data-i18n="presets.earthMoon">Earth-Moon</option>
+    <option value="solar"      data-i18n="presets.solar">Solar System</option>
+    <option value="lagrange"   data-i18n="presets.lagrange">Triangle</option>
+    <option value="pinwheel"   data-i18n="presets.pinwheel">Pinwheel</option>
   </select>
   <button id="reset" data-i18n="controls.reset">Reset</button>
   <button id="playPause" class="primary" data-i18n="controls.pause">Pause</button>
@@ -56,17 +56,17 @@
         <div class="slider-row" data-param="G" style="--slider-color: var(--col-G)">
           <label style="color: var(--col-G)">G<span class="hint" data-i18n="sections.force.hintG">grav. const</span></label>
           <input type="range" min="0.1" max="3" step="0.01" value="1">
-          <span class="value">1.00</span>
+          <input type="number" class="value" step="any" value="1">
         </div>
         <div class="slider-row" data-param="eps" style="--slider-color: var(--col-eps)">
           <label style="color: var(--col-eps)">ε<span class="hint" data-i18n="sections.force.hintEps">softening</span></label>
           <input type="range" min="0.01" max="0.5" step="0.01" value="0.05">
-          <span class="value">0.05</span>
+          <input type="number" class="value" step="any" value="0.05">
         </div>
         <div class="slider-row" data-param="n" style="--slider-color: var(--col-n)">
           <label style="color: var(--col-n)">n<span class="hint" data-i18n="sections.force.hintN">exponent</span></label>
           <input type="range" min="1" max="3" step="0.01" value="2">
-          <span class="value">2.00</span>
+          <input type="number" class="value" step="any" value="2">
         </div>
       </div>
 
@@ -90,12 +90,12 @@
         <div class="slider-row" data-param="dt" style="--slider-color: var(--col-dt)">
           <label style="color: var(--col-dt)">Δt<span class="hint" data-i18n="sections.integrator.hintDt">step size</span></label>
           <input type="range" min="0.001" max="0.05" step="0.001" value="0.01">
-          <span class="value">0.010</span>
+          <input type="number" class="value" step="any" value="0.01">
         </div>
-        <div class="slider-row" data-param="substeps">
-          <label><span class="hint" data-i18n="sections.integrator.hintSubsteps">steps / frame</span></label>
-          <input type="range" min="1" max="20" step="1" value="4">
-          <span class="value">4</span>
+        <div class="slider-row" data-param="speed">
+          <label><span class="hint" data-i18n="sections.integrator.hintSpeed">speed</span></label>
+          <input type="range" min="0.4" max="8" step="0.1" value="1">
+          <input type="number" class="value" step="any" value="1">
         </div>
       </div>
       <div class="footnote" data-i18n-html="sections.integrator.footnote"></div>
@@ -129,15 +129,21 @@
       <div class="slider-group">
         <div class="slider-row" data-param="trail">
           <label><span class="hint" data-i18n="sections.display.hintTrail">trail length</span></label>
-          <input type="range" min="0" max="600" step="10" value="220">
-          <span class="value">220</span>
+          <input type="range" min="0" max="30" step="0.1" value="8">
+          <input type="number" class="value" step="any" value="8">
         </div>
         <div class="slider-row" data-param="zoom">
           <label><span class="hint" data-i18n="sections.display.hintZoom">zoom</span></label>
-          <input type="range" min="0.3" max="3" step="0.05" value="1">
-          <span class="value">1.00</span>
+          <input type="range" min="0.1" max="3" step="0.05" value="1">
+          <input type="number" class="value" step="any" value="1">
+        </div>
+        <div class="slider-row" data-param="warp">
+          <label><span class="hint" data-i18n="sections.display.hintWarp">field warp</span></label>
+          <input type="range" min="0" max="10" step="0.05" value="0">
+          <input type="number" class="value" step="any" value="0">
         </div>
       </div>
+      <div class="footnote" data-i18n-html="sections.display.footnoteWarp"></div>
     </div>
 
   </div>

@@ -13,11 +13,11 @@
     "toggleStats": "Toggle diagnostics"
   },
   "presets": {
-    "binary":   "Binary Stars",
-    "figure8":  "Figure-8",
-    "solar":    "Solar System",
-    "lagrange": "Triangle",
-    "pinwheel": "Pinwheel"
+    "binary":    "Binary Stars",
+    "earthMoon": "Earth-Moon",
+    "solar":     "Solar System",
+    "lagrange":  "Triangle",
+    "pinwheel":  "Pinwheel"
   },
   "sections": {
     "force": {
@@ -33,9 +33,9 @@
       "number": "§2",
       "heading": "Stepping forward in time",
       "body": "Each frame we move every body forward in small time steps. This method keeps the total energy stable over long runs.",
-      "hintDt":       "step size",
-      "hintSubsteps": "speed",
-      "footnote": "Smaller <strong style=\"color: var(--col-dt)\">Δt</strong> is more accurate but slower. Crank Δt up to watch the simulation break."
+      "hintDt":    "step size",
+      "hintSpeed": "speed",
+      "footnote": "Smaller <strong style=\"color: var(--col-dt)\">Δt</strong> is more accurate but slower. <strong>Speed</strong> is a real-time multiplier; it does not affect accuracy. Crank Δt up to watch the simulation break."
     },
     "energy": {
       "number": "§3",
@@ -52,7 +52,9 @@
       "number": "§5",
       "heading": "Display",
       "hintTrail": "trail length",
-      "hintZoom":  "zoom"
+      "hintZoom":  "zoom",
+      "hintWarp":  "field warp",
+      "footnoteWarp": "<strong>Trail length</strong> is in sim-time units (years for the realistic Solar System), so the visible trail stays the same length when you change <em>speed</em>. <strong>Field warp</strong> compresses distance from the most-massive body logarithmically: the realistic Solar System needs warp ≈ 1.5 to fit Mercury and Neptune on the same screen. Click a value to type any number, including beyond the slider range."
     }
   },
   "stats": {

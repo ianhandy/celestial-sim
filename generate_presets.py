@@ -34,22 +34,32 @@ CANONICAL_PRESETS = {
         ],
         "colors": ["#f6c667", "#ff7ab6"],
     },
-    "figure8": {
+    "earthMoon": {
         "bodies": [
-            {"pos": [-0.97000436,  0.24308753], "vel": [ 0.466203685,  0.43236573], "mass": 1.0},
-            {"pos": [ 0.97000436, -0.24308753], "vel": [ 0.466203685,  0.43236573], "mass": 1.0},
-            {"pos": [ 0.0,         0.0       ], "vel": [-0.93240737,  -0.86473146], "mass": 1.0},
+            {"pos": [-0.109, 0.0], "vel": [0.0, -0.195], "mass": 5.0},
+            {"pos": [ 1.091, 0.0], "vel": [0.0,  1.945], "mass": 0.5},
         ],
-        "colors": ["#89c9ff", "#f6c667", "#ff7ab6"],
+        "colors": ["#6ba3ff", "#c8c8d4"],
     },
     "solar": {
+        # Realistic 8-planet system. 1 sim-time = 1 year, 1 sim-length = 1 AU,
+        # G = 1, M_sun = 4*pi^2. Planet masses are real Earth-mass ratios scaled
+        # by M_sun / 333000. Use field-warp to compress Mercury (0.39 AU) and
+        # Neptune (30 AU) onto the same screen.
         "bodies": [
-            {"pos": [ 0.0, 0.0], "vel": [ 0.0,    0.0  ], "mass": 20.0},
-            {"pos": [ 1.5, 0.0], "vel": [ 0.0,    3.651], "mass":  0.3},
-            {"pos": [-2.5, 0.0], "vel": [ 0.0,   -2.828], "mass":  0.6},
-            {"pos": [ 0.0, 4.0], "vel": [-2.236,  0.0  ], "mass":  0.2},
+            {"pos": [ 0.000,    0.000  ], "vel": [ 0.0,      0.0     ], "mass": 39.4784,  "radius": 18},
+            {"pos": [ 0.387,    0.000  ], "vel": [ 0.0,     10.099   ], "mass": 6.55e-6,  "radius":  3},
+            {"pos": [ 0.5113,   0.5113 ], "vel": [-5.224,    5.224   ], "mass": 9.66e-5,  "radius":  5},
+            {"pos": [ 0.000,    1.000  ], "vel": [-6.2832,   0.0     ], "mass": 1.186e-4, "radius":  5},
+            {"pos": [-1.0779,   1.0779 ], "vel": [-3.597,   -3.597   ], "mass": 1.27e-5,  "radius":  4},
+            {"pos": [-5.203,    0.000  ], "vel": [ 0.0,     -2.755   ], "mass": 0.0377,   "radius": 12},
+            {"pos": [-6.744,   -6.744  ], "vel": [ 1.438,   -1.438   ], "mass": 0.01128,  "radius": 10},
+            {"pos": [ 0.000,  -19.191  ], "vel": [ 1.434,    0.0     ], "mass": 1.722e-3, "radius":  7},
+            {"pos": [21.262,  -21.262  ], "vel": [ 0.810,    0.810   ], "mass": 2.029e-3, "radius":  7},
         ],
-        "colors": ["#f6c667", "#6be1c7", "#ff7ab6", "#c89bf5"],
+        "colors": ["#f6c667", "#8a8a8a", "#d4c47c", "#6ba3ff", "#c1440e",
+                   "#d4a06a", "#e8c97a", "#a8d8e8", "#4060c0"],
+        "defaults": {"warp": 1.5, "zoom": 0.6, "trail": 5.0, "speed": 0.5, "dt": 0.005},
     },
     "lagrange": {
         "bodies": [

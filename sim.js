@@ -149,22 +149,40 @@ const PRESETS = {
     ],
     colors: ['#f6c667', '#ff7ab6'],
   },
-  figure8: {
+  earthMoon: {
+    // Earth+Moon binary in barycentric frame. Separation a = 1.2, masses 5 / 0.5.
+    // v_total = sqrt(G·M_total/a) = sqrt(5.5/1.2) ≈ 2.140; split inversely with mass.
     bodies: [
-      { pos: [-0.97000436,  0.24308753], vel: [ 0.466203685,  0.43236573 ], mass: 1.0 },
-      { pos: [ 0.97000436, -0.24308753], vel: [ 0.466203685,  0.43236573 ], mass: 1.0 },
-      { pos: [ 0,           0         ], vel: [-0.93240737,  -0.86473146 ], mass: 1.0 },
+      { pos: [-0.109, 0], vel: [0, -0.195], mass: 5.0 },
+      { pos: [ 1.091, 0], vel: [0,  1.945], mass: 0.5 },
     ],
-    colors: ['#89c9ff', '#f6c667', '#ff7ab6'],
+    colors: ['#6ba3ff', '#c8c8d4'],
   },
   solar: {
+    // Realistic 8-planet solar system with relative masses and distances.
+    // Units: 1 sim-time = 1 year, 1 sim-length = 1 AU, G = 1, M_sun = 4*pi^2 (so
+    // Earth's circular speed is 2*pi and its orbital period is 1 sim-time, by
+    // Kepler's third law). Planet masses are the real Earth-mass ratios scaled
+    // by M_sun / 333000. Periods follow T = r^(3/2) (in years).
+    // Use the field-warp slider to see Mercury and Neptune on one screen.
+    // Bodies are placed at staggered angles so the system is not collinear.
+    // Per-body radius is set in pixels because the cube-root size formula
+    // would render every planet as 3 px next to a relatively giant Sun.
     bodies: [
-      { pos: [ 0,   0  ], vel: [ 0,     0    ], mass: 20.0 },
-      { pos: [ 1.5, 0  ], vel: [ 0,     3.651], mass:  0.3 },
-      { pos: [-2.5, 0  ], vel: [ 0,    -2.828], mass:  0.6 },
-      { pos: [ 0,   4  ], vel: [-2.236, 0    ], mass:  0.2 },
+      { pos: [ 0.000,   0.000  ], vel: [ 0.0,      0.0     ], mass: 39.4784,    radius: 18 },
+      { pos: [ 0.387,   0.000  ], vel: [ 0.0,     10.099   ], mass: 6.55e-6,    radius:  3 },
+      { pos: [ 0.5113,  0.5113 ], vel: [-5.224,    5.224   ], mass: 9.66e-5,    radius:  5 },
+      { pos: [ 0.000,   1.000  ], vel: [-6.2832,   0.0     ], mass: 1.186e-4,   radius:  5 },
+      { pos: [-1.0779,  1.0779 ], vel: [-3.597,   -3.597   ], mass: 1.27e-5,    radius:  4 },
+      { pos: [-5.203,   0.000  ], vel: [ 0.0,     -2.755   ], mass: 0.0377,     radius: 12 },
+      { pos: [-6.744,  -6.744  ], vel: [ 1.438,   -1.438   ], mass: 0.01128,    radius: 10 },
+      { pos: [ 0.000, -19.191  ], vel: [ 1.434,    0.0     ], mass: 1.722e-3,   radius:  7 },
+      { pos: [21.262, -21.262  ], vel: [ 0.810,    0.810   ], mass: 2.029e-3,   radius:  7 },
     ],
-    colors: ['#f6c667', '#6be1c7', '#ff7ab6', '#c89bf5'],
+    colors: ['#f6c667', '#8a8a8a', '#d4c47c', '#6ba3ff', '#c1440e',
+             '#d4a06a', '#e8c97a', '#a8d8e8', '#4060c0'],
+    // Auto-applied on load so the preset is usable out of the box.
+    defaults: { warp: 1.5, zoom: 0.6, trail: 5.0, speed: 0.5, dt: 0.005 },
   },
   lagrange: {
     bodies: [
@@ -195,8 +213,15 @@ let trail = [];
 let lastFrame = 0;
 let fps = 60;
 let currentMasses = [];
-const params = { G: 1.0, eps: 0.05, n: 2.0, dt: 0.01, substeps: 4, trail: 220, zoom: 1 };
+/* params.speed is a time multiplier (1.0 = baseline). Sim time advances
+   speed * BASE_SUBSTEPS * dt per real-time frame, accumulated via pendingSimTime
+   so fractional speeds (e.g. 0.4) integrate cleanly across frames.
+   params.trail is in sim-time units. Trail points are trimmed by age so the
+   on-screen trail length stays the same regardless of speed. */
+const BASE_SUBSTEPS = 4;
+const params = { G: 1.0, eps: 0.05, n: 2.0, dt: 0.01, speed: 1.0, trail: 8.0, zoom: 1, warp: 0 };
 const view = { panX: 0, panY: 0 };
+let pendingSimTime = 0;
 
 async function init() {
   await loadStrings();
@@ -256,6 +281,14 @@ function focusRow(param) {
 function loadPreset(name) {
   currentPreset = name;
   const p = PRESETS[name];
+  // Apply preset defaults (warp, zoom, dt, etc.) before constructing the sim
+  // so any dt-sensitive setup uses the right value.
+  if (p.defaults) {
+    for (const [k, v] of Object.entries(p.defaults)) {
+      params[k] = v;
+      syncSliderToParam(k, v);
+    }
+  }
   const positions  = p.bodies.map(b => b.pos);
   const velocities = p.bodies.map(b => b.vel);
   const masses     = p.bodies.map(b => b.mass);
@@ -263,9 +296,22 @@ function loadPreset(name) {
   sim = new NBody(positions, velocities, masses);
   sim.setParams(params.G, params.eps, params.n, params.dt);
   trail = p.bodies.map(() => []);
+  pendingSimTime = 0;
   view.panX = 0;
   view.panY = 0;
   rebuildMassSliders();
+  updateLegend();
+}
+
+/* Push a programmatically-set param value back into its slider + number input,
+   so the UI reflects the change (used when a preset applies its defaults). */
+function syncSliderToParam(name, value) {
+  const row = document.querySelector(`[data-param="${name}"]`);
+  if (!row) return;
+  const slider = row.querySelector('input[type=range]');
+  const num = row.querySelector('input[type=number]');
+  if (slider) slider.value = value;
+  if (num) num.value = value;
 }
 
 function rebuildMassSliders() {
@@ -275,22 +321,34 @@ function rebuildMassSliders() {
   const hintTemplate = t('sections.masses.hintBody', 'body {n}');
   preset.bodies.forEach((b, i) => {
     const hint = hintTemplate.replace('{n}', String(i + 1));
+    // Slider min/max bracket the body's preset mass on a log-ish scale so the
+    // slider stays useful across realistic ranges (Sun at ~40, Mercury at ~6e-6).
+    // The number input lets the user type any value, including outside this range.
+    const m = b.mass;
+    const sliderMin = Math.max(1e-8, m * 0.01);
+    const sliderMax = Math.max(1, m * 10);
+    const sliderStep = (sliderMax - sliderMin) / 1000;
     const row = document.createElement('div');
     row.className = 'slider-row';
     row.dataset.param = 'mass' + i;
     row.style.setProperty('--slider-color', preset.colors[i]);
     row.innerHTML = `
       <label style="color: ${preset.colors[i]}">m<span class="hint">${hint}</span></label>
-      <input type="range" min="0.05" max="25" step="0.05" value="${b.mass}">
-      <span class="value">${b.mass.toFixed(2)}</span>`;
-    const input = row.querySelector('input');
-    const valEl = row.querySelector('.value');
-    input.addEventListener('input', e => {
-      const v = parseFloat(e.target.value);
-      valEl.textContent = v.toFixed(2);
+      <input type="range" min="${sliderMin}" max="${sliderMax}" step="${sliderStep}" value="${m}">
+      <input type="number" class="value" step="any" value="${m}">`;
+    const slider = row.querySelector('input[type=range]');
+    const num = row.querySelector('input[type=number]');
+    function update(raw, source) {
+      const v = parseFloat(raw);
+      if (!isFinite(v) || v <= 0) return;
+      if (source !== 'slider') slider.value = v;
+      if (source !== 'number') num.value = v;
       currentMasses[i] = v;
-      sim.setMasses(currentMasses);
-    });
+      if (sim) sim.setMasses(currentMasses);
+    }
+    slider.addEventListener('input', () => update(slider.value, 'slider'));
+    num.addEventListener('input',  () => update(num.value, 'number'));
+    num.addEventListener('change', () => update(num.value, 'number'));
     container.appendChild(row);
   });
 }
@@ -305,25 +363,47 @@ function updateLegend() {
     <span><span style="color:var(--col-dt)">Δt</span> = <span class="val">${params.dt.toFixed(3)}</span></span>`;
 }
 
-document.querySelectorAll('.slider-row input[type=range]').forEach(input => {
-  const row = input.closest('.slider-row');
+/* Bidirectional slider <-> typable number-input wiring.
+   - The slider clamps to its own min/max (browser default).
+   - The number input accepts arbitrary values, including outside the slider
+     range, so the user can dial in extreme values (e.g. M_sun = 333000) by
+     typing while still using the slider for fast adjustment.
+   - Mass rows are wired separately in rebuildMassSliders(). */
+function applyParamValue(param, v) {
+  if      (param === 'speed') params.speed = v;
+  else if (param === 'trail') params.trail = v;
+  else if (param === 'zoom')  params.zoom  = v;
+  else if (param === 'warp')  params.warp  = v;
+  else {
+    params[param] = v;
+    if (sim) sim.setParams(params.G, params.eps, params.n, params.dt);
+  }
+  updateLegend();
+}
+
+function wireSliderRow(row) {
   const param = row.dataset.param;
   if (!param || param.startsWith('mass')) return;
-  input.addEventListener('input', e => {
-    const v = parseFloat(e.target.value);
-    const dp = (param === 'dt') ? 3
-             : (param === 'substeps' || param === 'trail') ? 0 : 2;
-    row.querySelector('.value').textContent = v.toFixed(dp);
-    if      (param === 'substeps') params.substeps = v;
-    else if (param === 'trail')    params.trail = v;
-    else if (param === 'zoom')     params.zoom = v;
-    else {
-      params[param] = v;
-      if (sim) sim.setParams(params.G, params.eps, params.n, params.dt);
-    }
-    updateLegend();
-  });
-});
+  const slider = row.querySelector('input[type=range]');
+  const num = row.querySelector('input[type=number]');
+  if (!slider) return;
+
+  function update(rawValue, source) {
+    const v = parseFloat(rawValue);
+    if (!isFinite(v)) return;
+    if (source !== 'slider' && slider) slider.value = v; // browser clamps to slider min/max
+    if (source !== 'number' && num)    num.value    = v;
+    applyParamValue(param, v);
+  }
+
+  slider.addEventListener('input', () => update(slider.value, 'slider'));
+  if (num) {
+    num.addEventListener('input',  () => update(num.value, 'number'));
+    num.addEventListener('change', () => update(num.value, 'number'));
+  }
+}
+
+document.querySelectorAll('.slider-row').forEach(wireSliderRow);
 
 document.getElementById('preset').addEventListener('change', e => loadPreset(e.target.value));
 document.getElementById('reset').addEventListener('click', () => loadPreset(currentPreset));
@@ -443,13 +523,14 @@ function drawGravityGrid() {
       }
 
       const idx = ri * cols + ci;
-      xs[idx] = W / 2 + (wx + dx) * scale + view.panX;
-      ys[idx] = H / 2 - (wy + dy) * scale + view.panY;
+      const [vx, vy] = warpPoint(wx + dx, wy + dy);
+      xs[idx] = W / 2 + vx * scale + view.panX;
+      ys[idx] = H / 2 - vy * scale + view.panY;
     }
   }
 
-  ctx.strokeStyle = 'rgba(120, 160, 220, 0.22)';
-  ctx.lineWidth = 0.9;
+  ctx.strokeStyle = 'rgba(120, 160, 220, 0.10)';
+  ctx.lineWidth = 0.7;
 
   for (let ri = 0; ri < rows; ri++) {
     ctx.beginPath();
@@ -471,10 +552,36 @@ function drawGravityGrid() {
   }
 }
 
+/* Field warp: non-linear radial compression centered on the most massive body.
+   r_warped = ln(1 + w*r) / w. As w -> 0 this is identity (linear). As w grows,
+   far distances compress logarithmically while near distances stay nearly
+   linear. Single parameter, monotonic, no upper bound. At w=1 a body at r=30
+   compresses to r=3.4. At w=10 it compresses to r=0.57. Lets a real solar
+   system (Mercury at 0.39 AU, Neptune at 30 AU) fit on one screen. */
+function warpPoint(x, y) {
+  const w = params.warp;
+  if (w <= 0 || !sim) return [x, y];
+  let maxM = -Infinity, refX = 0, refY = 0;
+  for (let i = 0; i < sim.N; i++) {
+    if (currentMasses[i] > maxM) {
+      maxM = currentMasses[i];
+      refX = sim.pos[2 * i];
+      refY = sim.pos[2 * i + 1];
+    }
+  }
+  const dx = x - refX, dy = y - refY;
+  const r = Math.sqrt(dx * dx + dy * dy);
+  if (r < 1e-9) return [x, y];
+  const rWarped = Math.log(1 + w * r) / w;
+  const f = rWarped / r;
+  return [refX + dx * f, refY + dy * f];
+}
+
 function worldToScreen(x, y) {
   const W = window.innerWidth, H = window.innerHeight;
   const scale = Math.min(W, H) / 8 * params.zoom;
-  return [W / 2 + x * scale + view.panX, H / 2 - y * scale + view.panY];
+  const [wx, wy] = warpPoint(x, y);
+  return [W / 2 + wx * scale + view.panX, H / 2 - wy * scale + view.panY];
 }
 
 function draw() {
@@ -486,10 +593,8 @@ function draw() {
   const preset = PRESETS[currentPreset];
   const N = sim.N;
 
-  for (let i = 0; i < N; i++) {
-    trail[i].push([sim.pos[2*i], sim.pos[2*i + 1]]);
-    while (trail[i].length > params.trail) trail[i].shift();
-  }
+  // Trim trails by sim-time age so on-screen length is independent of speed.
+  trimTrails();
   for (let i = 0; i < N; i++) {
     const color = preset.colors[i];
     ctx.strokeStyle = color;
@@ -510,7 +615,11 @@ function draw() {
   for (let i = 0; i < N; i++) {
     const [x, y] = worldToScreen(sim.pos[2*i], sim.pos[2*i + 1]);
     const m = currentMasses[i] || preset.bodies[i].mass;
-    const r = Math.max(3, Math.pow(m, 1 / 3) * 5.5);
+    // Preset can pin a render radius (in pixels) per body. Useful when masses
+    // span 5+ orders of magnitude and the cube-root size formula collapses.
+    const presetRadius = preset.bodies[i].radius;
+    const r = presetRadius !== undefined ? presetRadius
+            : Math.max(3, Math.pow(m, 1 / 3) * 5.5);
     const color = preset.colors[i];
 
     const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 5);
@@ -536,8 +645,34 @@ function draw() {
   }
 }
 
+function pushTrailSample() {
+  for (let i = 0; i < sim.N; i++) {
+    trail[i].push([sim.pos[2*i], sim.pos[2*i + 1], sim.t]);
+    // Hard cap on entries to bound memory in pathological cases.
+    if (trail[i].length > 5000) trail[i].shift();
+  }
+}
+
+function trimTrails() {
+  const cutoff = sim.t - params.trail;
+  for (let i = 0; i < sim.N; i++) {
+    const tr = trail[i];
+    while (tr.length > 0 && tr[0][2] < cutoff) tr.shift();
+  }
+}
+
 function animate(now) {
-  if (!paused && sim) sim.stepN(params.substeps);
+  if (!paused && sim) {
+    pendingSimTime += params.speed * BASE_SUBSTEPS * params.dt;
+    // Cap to avoid death-spiral if the tab was backgrounded for a long time.
+    const maxBurst = 200 * params.dt;
+    if (pendingSimTime > maxBurst) pendingSimTime = maxBurst;
+    while (pendingSimTime >= params.dt) {
+      sim.step();
+      pendingSimTime -= params.dt;
+      pushTrailSample();
+    }
+  }
   if (sim) {
     draw();
     document.getElementById('stat-time').textContent = sim.t.toFixed(2);
